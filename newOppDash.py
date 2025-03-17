@@ -9,7 +9,7 @@ import pandas as pd
 load_dotenv()
 
 # Function to connect to Salesforce and execute SOQL query
-def connect_to_salesforce_and_run_query(name_filter=None, id_filter=None):
+def connect_to_salesforce_and_run_query():
     """Connect to Salesforce and execute SOQL query for opportunities."""
     try:
         # Connect to Salesforce using environment variables
@@ -20,21 +20,13 @@ def connect_to_salesforce_and_run_query(name_filter=None, id_filter=None):
         )
         st.success("Salesforce connection successful!")
 
-        # Define the SOQL query with optional filters for Name and Id
+        # Define the SOQL query
         soql_query = """
             SELECT CreatedDate, StageName, Name, Id 
             FROM Opportunity
             WHERE CreatedDate = LAST_N_DAYS:7 
             AND StageName = 'New'
         """
-        
-        # Apply name filter if provided
-        if name_filter:
-            soql_query += f" AND Name LIKE '%{name_filter}%'"
-        
-        # Apply Id filter if provided
-        if id_filter:
-            soql_query += f" AND Id = '{id_filter}'"
         
         # Execute the SOQL query
         query_results = sf.query_all(soql_query)
@@ -46,12 +38,12 @@ def connect_to_salesforce_and_run_query(name_filter=None, id_filter=None):
         # Convert CreatedDate to datetime for better plotting
         df['CreatedDate'] = pd.to_datetime(df['CreatedDate'])
         
-        # Return the dataframe, query used, and filter details
-        return df, soql_query, name_filter, id_filter
+        # Return the dataframe and query used
+        return df, soql_query
         
     except Exception as e:
         st.error(f"Error while querying Salesforce: {str(e)}")
-        return None, None, None, None
+        return None, None
 
 
 # Streamlit UI - Dashboard Layout
@@ -62,26 +54,22 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.df = None
     st.session_state.query = None
-    st.session_state.name_filter = None
-    st.session_state.id_filter = None
     st.session_state.total_count = 0
 
-# Sidebar for filters and authentication
-st.sidebar.header("Authentication & Filter Options")
+# Sidebar for authentication
+st.sidebar.header("Authentication")
 
 # Authenticate only once
 if not st.session_state.authenticated:
     if st.sidebar.button("Authenticate & Run Query"):
         # Try connecting to Salesforce (authentication check)
-        df, query, name_filter, id_filter = connect_to_salesforce_and_run_query()
+        df, query = connect_to_salesforce_and_run_query()
         if df is not None:
             st.session_state.authenticated = True
             st.session_state.df = df
             st.session_state.query = query
-            st.session_state.name_filter = name_filter
-            st.session_state.id_filter = id_filter
             st.session_state.total_count = len(df)
-            st.sidebar.success("Authentication successful. You can now view and filter the data.")
+            st.sidebar.success("Authentication successful. You can now view the data.")
 else:
     st.sidebar.success("Already authenticated. You can view and interact with the data.")
 
@@ -94,28 +82,6 @@ if st.session_state.authenticated:
     # Display SOQL query used
     st.subheader("SOQL Query")
     st.code(st.session_state.query)
-
-    # Display filters applied in the query
-    st.subheader("Filters Applied")
-    st.write(f"Name Filter: {st.session_state.name_filter if st.session_state.name_filter else 'None'}")
-    st.write(f"Id Filter: {st.session_state.id_filter if st.session_state.id_filter else 'None'}")
-
-    # Sidebar Filter Options for Opportunity Name and ID
-    st.sidebar.header("Apply Filters")
-    name_filter_input = st.sidebar.text_input("Opportunity Name", value=st.session_state.name_filter if st.session_state.name_filter else "")
-    id_filter_input = st.sidebar.text_input("Opportunity ID", value=st.session_state.id_filter if st.session_state.id_filter else "")
-
-    # Update data with the selected filters
-    if name_filter_input or id_filter_input:
-        df, query, name_filter_input, id_filter_input = connect_to_salesforce_and_run_query(
-            name_filter=name_filter_input, id_filter=id_filter_input
-        )
-        if df is not None:
-            st.session_state.df = df
-            st.session_state.query = query
-            st.session_state.name_filter = name_filter_input
-            st.session_state.id_filter = id_filter_input
-            st.session_state.total_count = len(df)
 
     # Visualization Section
     st.subheader("Visualizations")
