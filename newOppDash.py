@@ -47,7 +47,7 @@ def connect_to_salesforce_and_run_query():
 
 
 # Streamlit UI - Dashboard Layout
-st.title("Salesforce Opportunity Query Dashboard")
+st.title("Quote Requests Dashboard")
 
 # Session state for persistent variables
 if 'authenticated' not in st.session_state:
