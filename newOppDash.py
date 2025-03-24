@@ -37,7 +37,7 @@ def get_date_range(period):
     else:
         raise ValueError("Invalid period selected")
     
-    return start_of_period.isoformat(), end_of_period.isoformat()
+    return start_of_period.isoformat(), end_of_period.isoformat(), start_of_period, end_of_period
 
 # Function to connect to Salesforce and execute SOQL query
 def connect_to_salesforce_and_run_query(start_date, end_date):
@@ -87,6 +87,8 @@ if 'authenticated' not in st.session_state:
     st.session_state.query = None
     st.session_state.total_count = 0
     st.session_state.selected_period = "Week"
+    st.session_state.period_start = None
+    st.session_state.period_end = None
 
 # Sidebar for period selection and authentication
 st.sidebar.header("Dashboard Options")
@@ -102,7 +104,7 @@ selected_period = st.sidebar.selectbox(
 if not st.session_state.authenticated:
     if st.sidebar.button("Authenticate & Run Query"):
         # Calculate date range for the selected period
-        start_date, end_date = get_date_range(selected_period)
+        start_date, end_date, period_start, period_end = get_date_range(selected_period)
         # Try connecting to Salesforce (authentication check)
         df, query = connect_to_salesforce_and_run_query(start_date, end_date)
         if df is not None:
@@ -111,27 +113,40 @@ if not st.session_state.authenticated:
             st.session_state.query = query
             st.session_state.total_count = len(df)
             st.session_state.selected_period = selected_period
+            st.session_state.period_start = period_start
+            st.session_state.period_end = period_end
             st.sidebar.success("Authentication successful. You can now view the data.")
 else:
     # Re-run query if period changes
     if selected_period != st.session_state.selected_period:
-        start_date, end_date = get_date_range(selected_period)
+        start_date, end_date, period_start, period_end = get_date_range(selected_period)
         df, query = connect_to_salesforce_and_run_query(start_date, end_date)
         if df is not None:
             st.session_state.df = df
             st.session_state.query = query
             st.session_state.total_count = len(df)
             st.session_state.selected_period = selected_period
+            st.session_state.period_start = period_start
+            st.session_state.period_end = period_end
 
 # Main content area
 if st.session_state.authenticated:
+    # Display reporting period information
+    if st.session_state.period_start and st.session_state.period_end:
+        st.subheader("Reporting Period")
+        if st.session_state.selected_period == "Month":
+            period_display = f"{st.session_state.period_start.strftime('%B %Y')}"
+        elif st.session_state.selected_period == "Week":
+            period_display = f"Week of {st.session_state.period_start.strftime('%B %d, %Y')} to {st.session_state.period_end.strftime('%B %d, %Y')}"
+        else:  # Quarter
+            quarter_num = (st.session_state.period_start.month - 1) // 3 + 1
+            period_display = f"Q{quarter_num} {st.session_state.period_start.year}"
+        
+        st.info(f"**Reporting Period: {period_display}**", icon="📅")
+    
     # Display the total number of opportunities
     st.subheader("Opportunities Summary")
     st.metric("Total Opportunities (New)", st.session_state.total_count)
-
-    # Display SOQL query used
-    st.subheader("SOQL Query")
-    st.code(st.session_state.query)
 
     # Visualization Section
     st.subheader("Visualizations")
@@ -166,7 +181,6 @@ if st.session_state.authenticated:
         )
         st.plotly_chart(fig3)
 
-
     elif chart_type == "Line Chart":
         opportunities_by_type = st.session_state.df.groupby(['New_Business_or_Renewal__c', st.session_state.df['CreatedDate'].dt.date]).size().reset_index(name='Opportunities')
         fig4 = px.line(opportunities_by_type, x='CreatedDate', y='Opportunities', color='New_Business_or_Renewal__c', title="Opportunities by Type Over Time (Line Chart)")
@@ -179,6 +193,10 @@ if st.session_state.authenticated:
     elif chart_type == "Box Plot":
         fig6 = px.box(st.session_state.df, x='New_Business_or_Renewal__c', y='CreatedDate', title="Opportunities by Type (Box Plot)")
         st.plotly_chart(fig6)
+
+    # Display SOQL query used (moved below visualizations)
+    with st.expander("View SOQL Query", expanded=False):
+        st.code(st.session_state.query)
 
 else:
     st.warning("Authenticate first to view data and charts.")
